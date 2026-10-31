@@ -20,17 +20,19 @@ class Tk(Enum):
 
 TOKEN_PATTERN = {
 	Tk.Key_Let: r"let",
+
+	# NOTE: must place after String pattern 
+	Tk.Useless: r"\/\/[^\n]*|\/\*[\S\s]*?\*\/",
 	
 	Tk.Id: r"[a-zA-Z_][a-zA-Z0-9_]*",
 	Tk.Equal: r"=",
-	Tk.Float: r"[+-]?[0-9]+\.[0-9]+", # order is important
+	Tk.Float: r"[+-]?([0-9]+)?\.([0-9]+)?",
 	Tk.Int: r"[+-]?[0-9]+",
 	Tk.Plus: r"\+",
 	Tk.Star: r"\*",
 	Tk.Semi: r";",
 	
 	Tk.NotAssigned: r"\S",
-	Tk.Useless: r"\/\/[^\n]*",
 }
 
 
