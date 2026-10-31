@@ -1,5 +1,6 @@
 
 import re
+import sys
 from enum import Enum
 from dataclasses import dataclass
 from typing import Any
@@ -36,6 +37,9 @@ TOKEN_PATTERN = {
 }
 
 
+Variables = dict[str, Any]
+
+
 @dataclass
 class Token:
 	typ: Tk
@@ -43,11 +47,90 @@ class Token:
 	line: int
 	col: int
 
+	def __eq__(self, value: object) -> bool:
+		if isinstance(value, Tk):
+			return self.typ == value
+		else:
+			return False
+
+
+class Block:
+	def __init__(self, tokens: list[Token], frames: list[Variables]) -> None:
+		self.tokens = tokens
+		self.ptr = 0
+		self.frames = frames
+
+
+	def error(self, msg: str):
+		sys.stderr.write(f"[error] {msg}.")
+		sys.exit(1)
+
+
+	def set_frame_variable(self, name: str, value: Any):
+		self.frames[-1][name] = value
+
+
+	def get_frame_variable(self, name: str) -> Any:
+		for frame in self.frames[::-1]:
+			if name in frame:
+				return frame[name]
+
+		self.error(f"identifier {name} doesn't exist")
+
+
+	def next_token(self) -> Token:
+		self.ptr += 1
+		if self.ptr >= len(self.tokens):
+			self.error("unexpected EOF")
+		return self.tokens[self.ptr]
+
+
+	def expect_next_token(self, expected: Tk) -> Token:
+		tok = self.next_token()
+
+		if tok == expected:
+			return tok
+
+		self.error(f"expected {expected}, got {tok.typ} instead")
+
+
+	# TODO: pratt paring
+	def evaluate_next(self) -> Any:
+		self.ptr += 2
+		return 42
+
+
+	def run(self, modify_frames = True):
+		self.ptr = 0
+
+		if modify_frames:
+			self.frames.append({})
+
+		while self.ptr < len(self.tokens):
+			first = self.tokens[self.ptr].val
+
+			if first == "let":
+				name = self.expect_next_token(Tk.Id).val
+				self.expect_next_token(Tk.Equal)
+				value = self.evaluate_next()
+
+				self.set_frame_variable(name, value)
+
+			# asserts semi colon
+			if (self.tokens[self.ptr] != Tk.Semi):
+				self.error("expected ';'")
+
+			self.ptr += 1
+
+		if modify_frames:
+			self.frames.pop()
+
 
 class Lang:
 	def __init__(self, src: str) -> None:
 		self.src = src
 		self.tokens = []
+		self.frames: list[Variables] = []
 
 
 	def parse(self):
@@ -73,4 +156,9 @@ class Lang:
 
 
 	def run(self):
-		print(self.tokens)
+		self.frames.append({})
+
+		root_block = Block(self.tokens, self.frames)
+		root_block.run(False)
+
+		print(self.frames)
