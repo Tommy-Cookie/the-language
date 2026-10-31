@@ -117,6 +117,8 @@ class Block:
 		self.error(f"expected {expected}, got {tok.typ} instead")
 
 
+	#region Pratt Parsing
+
 	# TODO: pratt paring
 	# tree structure:
 	# [lhs, rhs, op] e.g. [1, [3, 2, Tk.Plus], Tk.Star]
@@ -181,6 +183,9 @@ class Block:
 			case _:
 				self.error(f"unknow operation {op}")
 
+	#endregion
+
+	#region Run
 
 	def run(self, modify_frames = True):
 		self.ptr = 0
@@ -206,6 +211,8 @@ class Block:
 
 		if modify_frames:
 			self.frames.pop()
+
+	#endregion
 
 
 class Lang:
