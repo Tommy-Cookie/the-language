@@ -72,6 +72,9 @@ class Block:
 
 
 	def create_frame_variable(self, name: str, value: Any):
+		if name in self.frames[-1]:
+			self.error(f"redefine identifier '{name}'")
+		
 		self.frames[-1][name] = value
 
 
