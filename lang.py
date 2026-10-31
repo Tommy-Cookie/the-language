@@ -134,6 +134,8 @@ class Block:
 				self.frames[addr][addr_tree.val] = val
 			return
 
+		self.error("NOT IMPLEMENTED")
+
 
 	#region Pratt Parsing
 
