@@ -96,7 +96,7 @@ class Block:
 
 	# TODO: pratt paring
 	def evaluate_next(self) -> Any:
-		self.ptr += 2
+		self.ptr += 1
 		return 42
 
 
