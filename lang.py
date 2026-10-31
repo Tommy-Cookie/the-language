@@ -127,10 +127,12 @@ class Block:
 
 	# TODO: make it work for all possible cases
 	# `tree` is the address, see line 138 for tree structure
-	def set_value_to_address(self, tree: list, val: Any):
-		print(tree)
-		addr = self.get_frame_address(tree.val)
-		self.frames[addr][tree.val] = val
+	def set_value_to_address(self, addr_tree: list, val: Any, is_top = True):
+		if isinstance(addr_tree, Token):
+			if is_top:
+				addr = self.get_frame_address(addr_tree.val)
+				self.frames[addr][addr_tree.val] = val
+			return
 
 
 	#region Pratt Parsing
@@ -190,30 +192,31 @@ class Block:
 
 	#region Run
 
-	def evaluate_tree_value(self, tree: list):
+	def evaluate_tree(self, tree: list):
 		if isinstance(tree, Token):
 			if tree == Tk.Int or tree == Tk.Float:
 				return tree.val
 			elif tree == Tk.Id:
 				return self.get_frame_variable(tree.val)
 
-		lhs = self.evaluate_tree_value(tree[0])
-		rhs = self.evaluate_tree_value(tree[1])
 		op = tree[2]
+
+		if op == Tk.Equal:
+			lhs = tree[0]
+		else:
+			lhs = self.evaluate_tree(tree[0])
+		rhs = self.evaluate_tree(tree[1])
 
 		match op:
 			case Tk.Plus:
 				return lhs + rhs
 			case Tk.Star:
 				return lhs * rhs
+			case Tk.Equal:
+				self.set_value_to_address(lhs, rhs)
+				return rhs
 			case _:
 				self.error(f"unknow operation {op}")
-
-
-	def execute_tree(self, tree: list):
-		if tree[2] == Tk.Equal:
-			value = self.evaluate_tree_value(tree[1])
-			self.set_value_to_address(tree[0], value)
 
 
 	def run(self, modify_frames = True):
@@ -229,14 +232,14 @@ class Block:
 				name = self.expect_next_token(Tk.Id).val
 				self.expect_next_token(Tk.Equal)
 				tree = self.evaluate_next_to_tree()
-				value = self.evaluate_tree_value(tree)
+				value = self.evaluate_tree(tree)
 
 				self.create_frame_variable(name, value)
 			
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
-				self.execute_tree(tree)
+				self.evaluate_tree(tree)
 
 			# asserts semi colon
 			self.expect_next_token(Tk.Semi)
