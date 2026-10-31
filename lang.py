@@ -117,8 +117,7 @@ class Block:
 				self.set_frame_variable(name, value)
 
 			# asserts semi colon
-			if (self.tokens[self.ptr] != Tk.Semi):
-				self.error("expected ';'")
+			self.expect_next_token(Tk.Semi)
 
 			self.ptr += 1
 
