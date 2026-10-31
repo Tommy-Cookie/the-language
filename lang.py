@@ -40,6 +40,8 @@ TOKEN_PATTERN = {
 class Token:
 	typ: Tk
 	val: Any
+	line: int
+	col: int
 
 
 class Lang:
@@ -61,7 +63,10 @@ class Lang:
 			if m.lastgroup:
 				typ = Tk(int(m.lastgroup[1:]))
 
-			tokens.append(Token(typ, val))
+			line = self.src.count("\n", 0, m.start()) + 1
+			col = m.start() - self.src.rfind("\n", 0, m.start())
+
+			tokens.append(Token(typ, val, line, col))
 
 		self.tokens = tokens
 
