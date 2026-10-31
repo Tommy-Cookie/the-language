@@ -79,9 +79,9 @@ class Block:
 
 
 	def set_frame_variable(self, name: str, value: Any):
-		for i in range(len(self.frames) - 1, -1, -1):
-			if name in self.frames[i]:
-				self.frames[i][name] = value
+		for frame in self.frames[::-1]:
+			if name in frame:
+				frame[name] = value
 				return
 
 		self.error(f"identifier {name} doesn't exist")
@@ -91,6 +91,14 @@ class Block:
 		for frame in self.frames[::-1]:
 			if name in frame:
 				return frame[name]
+
+		self.error(f"identifier {name} doesn't exist")
+
+
+	def get_frame_address(self, name: str) -> int:
+		for i, frame in enumerate(self.frames[::-1]):
+			if name in frame:
+				return i
 
 		self.error(f"identifier {name} doesn't exist")
 
@@ -117,6 +125,14 @@ class Block:
 		self.error(f"expected {expected}, got {tok.typ} instead")
 
 
+	# TODO: make it work for all possible cases
+	# `tree` is the address, see line 138 for tree structure
+	def set_value_to_address(self, tree: list, val: Any):
+		print(tree)
+		addr = self.get_frame_address(tree.val)
+		self.frames[addr][tree.val] = val
+
+
 	#region Pratt Parsing
 
 	# TODO: pratt paring
@@ -127,7 +143,9 @@ class Block:
 		lhs = None
 
 		if tok == Tk.Int or tok == Tk.Float:
-			lhs = tok.val
+			lhs = tok
+		elif tok == Tk.Id:
+			lhs = tok
 		elif tok == Tk.LeftParen:
 			lhs = self.evaluate_next_to_tree()
 
@@ -159,6 +177,8 @@ class Block:
 
 	def infix_binding_power(self, op: Tk) -> tuple:
 		match op:
+			case Tk.Equal:
+				return 1, 0
 			case Tk.Plus:
 				return 11, 10
 			case Tk.Star:
@@ -170,12 +190,15 @@ class Block:
 
 	#region Run
 
-	def evaluate_value(self, tree: list):
-		if isinstance(tree, int) or isinstance(tree, float):
-			return tree
+	def evaluate_tree_value(self, tree: list):
+		if isinstance(tree, Token):
+			if tree == Tk.Int or tree == Tk.Float:
+				return tree.val
+			elif tree == Tk.Id:
+				return self.get_frame_variable(tree.val)
 
-		lhs = self.evaluate_value(tree[0])
-		rhs = self.evaluate_value(tree[1])
+		lhs = self.evaluate_tree_value(tree[0])
+		rhs = self.evaluate_tree_value(tree[1])
 		op = tree[2]
 
 		match op:
@@ -185,6 +208,12 @@ class Block:
 				return lhs * rhs
 			case _:
 				self.error(f"unknow operation {op}")
+
+
+	def execute_tree(self, tree: list):
+		if tree[2] == Tk.Equal:
+			value = self.evaluate_tree_value(tree[1])
+			self.set_value_to_address(tree[0], value)
 
 
 	def run(self, modify_frames = True):
@@ -200,12 +229,14 @@ class Block:
 				name = self.expect_next_token(Tk.Id).val
 				self.expect_next_token(Tk.Equal)
 				tree = self.evaluate_next_to_tree()
-				value = self.evaluate_value(tree)
+				value = self.evaluate_tree_value(tree)
 
 				self.create_frame_variable(name, value)
 			
 			else:
+				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
+				self.execute_tree(tree)
 
 			# asserts semi colon
 			self.expect_next_token(Tk.Semi)
