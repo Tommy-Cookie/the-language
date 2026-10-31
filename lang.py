@@ -157,6 +157,19 @@ class Block:
 		return lhs
 
 
+	def infix_binding_power(self, op: Tk) -> tuple:
+		match op:
+			case Tk.Plus:
+				return 11, 10
+			case Tk.Star:
+				return 21, 20
+			case _:
+				self.error(f"unknow operation {op}")
+
+	#endregion
+
+	#region Run
+
 	def evaluate_value(self, tree: list):
 		if isinstance(tree, int) or isinstance(tree, float):
 			return tree
@@ -174,19 +187,6 @@ class Block:
 				self.error(f"unknow operation {op}")
 
 
-	def infix_binding_power(self, op: Tk) -> tuple:
-		match op:
-			case Tk.Plus:
-				return 11, 10
-			case Tk.Star:
-				return 21, 20
-			case _:
-				self.error(f"unknow operation {op}")
-
-	#endregion
-
-	#region Run
-
 	def run(self, modify_frames = True):
 		self.ptr = 0
 
@@ -203,6 +203,9 @@ class Block:
 				value = self.evaluate_value(tree)
 
 				self.create_frame_variable(name, value)
+			
+			else:
+				tree = self.evaluate_next_to_tree()
 
 			# asserts semi colon
 			self.expect_next_token(Tk.Semi)
