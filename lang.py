@@ -17,6 +17,8 @@ class Tk(Enum):
 	Semi = 7
 	Float = 8
 	NotAssigned = 9
+	LeftParen = 10
+	RightParen = 11
 
 
 TOKEN_PATTERN = {
@@ -32,6 +34,8 @@ TOKEN_PATTERN = {
 	Tk.Plus: r"\+",
 	Tk.Star: r"\*",
 	Tk.Semi: r";",
+	Tk.LeftParen: r"\(",
+	Tk.RightParen: r"\)",
 	
 	Tk.NotAssigned: r"\S",
 }
@@ -62,12 +66,22 @@ class Block:
 
 
 	def error(self, msg: str):
-		sys.stderr.write(f"[error] {msg}.")
+		tok = self.tokens[min(self.ptr, len(self.tokens) - 1)]
+		sys.stderr.write(f"[error] {msg}.\n  at line {tok.line} col {tok.col}")
 		sys.exit(1)
 
 
-	def set_frame_variable(self, name: str, value: Any):
+	def create_frame_variable(self, name: str, value: Any):
 		self.frames[-1][name] = value
+
+
+	def set_frame_variable(self, name: str, value: Any):
+		for i in range(len(self.frames) - 1, -1, -1):
+			if name in self.frames[i]:
+				self.frames[i][name] = value
+				return
+
+		self.error(f"identifier {name} doesn't exist")
 
 
 	def get_frame_variable(self, name: str) -> Any:
@@ -85,6 +99,12 @@ class Block:
 		return self.tokens[self.ptr]
 
 
+	def peek_token(self) -> Token:
+		val = self.next_token()
+		self.ptr -= 1
+		return val
+
+
 	def expect_next_token(self, expected: Tk) -> Token:
 		tok = self.next_token()
 
@@ -95,9 +115,59 @@ class Block:
 
 
 	# TODO: pratt paring
-	def evaluate_next(self) -> Any:
-		self.ptr += 1
-		return 42
+	def evaluate_next(self, min_bp = 0) -> Any:
+		tok = self.next_token()
+		lhs = None
+
+		if tok == Tk.Int or tok == Tk.Float:
+			lhs = tok.val
+		elif tok == Tk.LeftParen:
+			lhs = self.evaluate_next()
+
+			if self.next_token() != Tk.RightParen:
+				self.error("mismatched parentheses")
+		else:
+			self.error(f"bad value '{tok.val}'")
+
+		while True:
+			tok = self.peek_token()
+			op = tok.typ
+
+			if op == Tk.Semi:
+				break
+			elif op == Tk.RightParen:
+				break
+
+			l_bp, r_bp = self.infix_binding_power(op)
+			if l_bp < min_bp:
+				break
+
+			self.next_token()
+
+			rhs = self.evaluate_next(r_bp)
+			lhs = self.perform_operation(lhs, rhs, op)
+
+		return lhs
+
+
+	def infix_binding_power(self, op: Tk) -> tuple:
+		match op:
+			case Tk.Plus:
+				return 11, 10
+			case Tk.Star:
+				return 21, 20
+			case _:
+				self.error(f"bad operation {op}")
+
+
+	def perform_operation(self, a, b, op: Tk):
+		match op:
+			case Tk.Plus:
+				return a + b
+			case Tk.Star:
+				return a * b
+			case _:
+				self.error(f"bad operation {op}")
 
 
 	def run(self, modify_frames = True):
@@ -114,7 +184,7 @@ class Block:
 				self.expect_next_token(Tk.Equal)
 				value = self.evaluate_next()
 
-				self.set_frame_variable(name, value)
+				self.create_frame_variable(name, value)
 
 			# asserts semi colon
 			self.expect_next_token(Tk.Semi)
@@ -149,12 +219,20 @@ class Lang:
 			line = self.src.count("\n", 0, pos) + 1
 			col = pos - self.src.rfind("\n", 0, pos)
 
-			tokens.append(Token(typ, val, line, col))
+			match typ:
+				case Tk.Int:
+					val = int(val)
+				case Tk.Float:
+					val = float(val)
+
+			if typ != Tk.Useless:
+				tokens.append(Token(typ, val, line, col))
 
 		self.tokens = tokens
 
 
 	def run(self):
+		print([t.val for t in self.tokens])
 		self.frames.append({})
 
 		root_block = Block(self.tokens, self.frames)
