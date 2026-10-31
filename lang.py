@@ -63,8 +63,9 @@ class Lang:
 			if m.lastgroup:
 				typ = Tk(int(m.lastgroup[1:]))
 
-			line = self.src.count("\n", 0, m.start()) + 1
-			col = m.start() - self.src.rfind("\n", 0, m.start())
+			pos = m.start()
+			line = self.src.count("\n", 0, pos) + 1
+			col = pos - self.src.rfind("\n", 0, pos)
 
 			tokens.append(Token(typ, val, line, col))
 
