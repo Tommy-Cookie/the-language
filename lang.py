@@ -115,14 +115,16 @@ class Block:
 
 
 	# TODO: pratt paring
-	def evaluate_next(self, min_bp = 0) -> Any:
+	# tree structure:
+	# [lhs, rhs, op] e.g. [1, [3, 2, Tk.Plus], Tk.Star]
+	def evaluate_next_to_tree(self, min_bp = 0) -> Any:
 		tok = self.next_token()
 		lhs = None
 
 		if tok == Tk.Int or tok == Tk.Float:
 			lhs = tok.val
 		elif tok == Tk.LeftParen:
-			lhs = self.evaluate_next()
+			lhs = self.evaluate_next_to_tree()
 
 			if self.next_token() != Tk.RightParen:
 				self.error("mismatched parentheses")
@@ -144,10 +146,27 @@ class Block:
 
 			self.next_token()
 
-			rhs = self.evaluate_next(r_bp)
-			lhs = self.perform_operation(lhs, rhs, op)
+			rhs = self.evaluate_next_to_tree(r_bp)
+			lhs = [lhs, rhs, op]
 
 		return lhs
+
+
+	def evaluate_value(self, tree: list):
+		if isinstance(tree, int) or isinstance(tree, float):
+			return tree
+
+		lhs = self.evaluate_value(tree[0])
+		rhs = self.evaluate_value(tree[1])
+		op = tree[2]
+
+		match op:
+			case Tk.Plus:
+				return lhs + rhs
+			case Tk.Star:
+				return lhs * rhs
+			case _:
+				self.error(f"unknow operation {op}")
 
 
 	def infix_binding_power(self, op: Tk) -> tuple:
@@ -157,17 +176,7 @@ class Block:
 			case Tk.Star:
 				return 21, 20
 			case _:
-				self.error(f"bad operation {op}")
-
-
-	def perform_operation(self, a, b, op: Tk):
-		match op:
-			case Tk.Plus:
-				return a + b
-			case Tk.Star:
-				return a * b
-			case _:
-				self.error(f"bad operation {op}")
+				self.error(f"unknow operation {op}")
 
 
 	def run(self, modify_frames = True):
@@ -182,7 +191,8 @@ class Block:
 			if first == "let":
 				name = self.expect_next_token(Tk.Id).val
 				self.expect_next_token(Tk.Equal)
-				value = self.evaluate_next()
+				tree = self.evaluate_next_to_tree()
+				value = self.evaluate_value(tree)
 
 				self.create_frame_variable(name, value)
 
