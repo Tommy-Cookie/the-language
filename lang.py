@@ -28,6 +28,14 @@ class Tk(Enum):
 	Data = 18 # use to mark lists into data lists
 
 
+class Typ(Enum):
+	Int = 0
+	Float = 1
+	String = 2
+	Array = 3
+	Id = 4
+
+
 TOKEN_PATTERN = {
 	Tk.Key_Let: r"let",
 
@@ -66,14 +74,24 @@ class Token:
 	def __eq__(self, value: object) -> bool:
 		if isinstance(value, Tk):
 			return self.typ == value
-		else:
-			return False
+		return False
 
 
 @dataclass
 class Extern:
 	callback: Callable
 	num_args: int
+
+
+@dataclass
+class Variant:
+	typ: Typ
+	val: Any
+
+	def __eq__(self, value: object) -> bool:
+		if isinstance(value, Typ):
+			return self.typ == value
+		return False
 
 
 class Block:
@@ -146,7 +164,7 @@ class Block:
 	# TODO: make it work for all possible cases
 	# `tree` is the address, see line 138 for tree structure
 	def set_value_to_address(self, addr_tree: list, val: Any, is_top = True):
-		if isinstance(addr_tree, Token):
+		if isinstance(addr_tree, Variant):
 			if is_top:
 				self.set_frame_variable(addr_tree.val, val)
 			else:
@@ -165,18 +183,20 @@ class Block:
 		tok = self.next_token()
 		lhs = None
 
-		if tok == Tk.Int or tok == Tk.Float:
-			lhs = tok
+		if tok == Tk.Int:
+			lhs = Variant(Typ.Int, tok.val)
+		elif tok == Tk.Float:
+			lhs = Variant(Typ.Float, tok.val)
 		elif tok == Tk.Id:
-			lhs = tok
+			lhs = Variant(Typ.Id, tok.val)
 		elif tok == Tk.String:
-			lhs = tok
+			lhs = Variant(Typ.String, tok.val)
 		elif tok == Tk.LeftParen:
 			lhs = self.evaluate_next_to_tree()
 			if self.next_token() != Tk.RightParen:
 				self.error("mismatched parentheses")
 		elif tok == Tk.LeftBraket:
-			lhs = [Tk.Data]
+			items = []
 			while True:
 				peek = self.peek_token()
 				if peek == Tk.RightBraket:
@@ -184,7 +204,8 @@ class Block:
 					break
 				if peek == Tk.Comma:
 					self.next_token()
-				lhs.append(self.evaluate_next_to_tree())
+				items.append(self.evaluate_next_to_tree())
+			lhs = Variant(Typ.Array, items)
 		else:
 			self.error(f"bad value '{tok.val}'")
 
@@ -245,19 +266,18 @@ class Block:
 	#region Run
 
 	def evaluate_tree(self, tree: list):
-		if isinstance(tree, Token):
-			if tree == Tk.Int or tree == Tk.Float:
+		if isinstance(tree, Variant):
+			if tree == Typ.Int or tree == Typ.Float:
 				return tree.val
-			elif tree == Tk.String:
+			elif tree == Typ.String:
 				return tree.val
-			elif tree == Tk.Id:
+			elif tree == Typ.Id:
 				return self.get_frame_variable(tree.val)
-
-		if tree[0] == Tk.Data:
-			items = []
-			for item in tree[1:]:
-				items.append(self.evaluate_tree(item))
-			return items
+			elif tree == Typ.Array:
+				items = []
+				for item in tree.val:
+					items.append(self.evaluate_tree(item))
+				return items
 
 		op = tree[2]
 
@@ -297,6 +317,9 @@ class Block:
 			case _:
 				self.error(f"unknow operation {op}")
 
+	#endregion
+
+	#region Run Line
 
 	def run(self, modify_frames = True):
 		self.ptr = 0
@@ -318,6 +341,7 @@ class Block:
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
+				print(tree)
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
@@ -327,8 +351,6 @@ class Block:
 
 		if modify_frames:
 			self.frames.pop()
-
-	#endregion
 
 
 class Lang:
