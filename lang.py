@@ -131,7 +131,7 @@ class Variant:
 
 
 class Block:
-	def __init__(self, tokens: list[Token], frames: list[Variables]) -> None:
+	def __init__(self, tokens: list[Token], frames: list[Variables], call_stack: list[Token]) -> None:
 		self.tokens = tokens
 		self.ptr = 0
 		self.frames = frames
@@ -139,10 +139,16 @@ class Block:
 		self.flag_break = False
 		self.flag_return: Any = None
 
+		self.call_stack = call_stack
+
 
 	def error(self, msg: str):
 		tok = self.tokens[min(self.ptr, len(self.tokens) - 1)]
-		sys.stderr.write(f"[error] {msg}.\n  at line {tok.line} col {tok.col}")
+		sys.stderr.write(f"[error] {msg}.\n  at line {tok.line} col {tok.col}\n")
+
+		for item in self.call_stack[::-1]:
+			sys.stderr.write(f"  at line {item.line} col {item.col}\n")
+		
 		sys.exit(1)
 
 
@@ -433,7 +439,8 @@ class Block:
 
 				elif lhs.typ == Typ.BlockFn: # type: ignore
 					if len(rhs) == len(lhs.val[1]): # type: ignore
-						sub_block = Block(lhs.val[0], self.frames) # type: ignore
+						self.call_stack.append(self.tokens[self.ptr])
+						sub_block = Block(lhs.val[0], self.frames, self.call_stack) # type: ignore
 
 						args = {}
 						for i in range(len(rhs)):# type: ignore
@@ -500,7 +507,7 @@ class Block:
 				condition = self.is_true(condition)
 
 				if condition:
-					sub_block = Block(true_body, self.frames)
+					sub_block = Block(true_body, self.frames, self.call_stack)
 					sub_block.run()
 
 					if sub_block.flag_break:
@@ -511,7 +518,7 @@ class Block:
 						return
 					
 				elif do_else:
-					sub_block = Block(false_body, self.frames)
+					sub_block = Block(false_body, self.frames, self.call_stack)
 					sub_block.run()
 
 					if sub_block.flag_break:
@@ -526,7 +533,7 @@ class Block:
 				condition = self.evaluate_next_to_tree()
 				
 				body = self.next_block()
-				sub_block = Block(body, self.frames)
+				sub_block = Block(body, self.frames, self.call_stack)
 
 				while self.is_true(self.evaluate_tree(condition)):
 					sub_block.run()
@@ -565,6 +572,7 @@ class Lang:
 		self.src = src
 		self.tokens = []
 		self.frames: list[Variables] = []
+		self.call_stack: list[Token] = []
 
 
 	def parse(self):
@@ -609,5 +617,5 @@ class Lang:
 		]
 
 		self.frames.append({})
-		root_block = Block(self.tokens, self.frames)
+		root_block = Block(self.tokens, self.frames, self.call_stack)
 		root_block.run(False)
