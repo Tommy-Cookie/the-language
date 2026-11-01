@@ -612,7 +612,8 @@ class Lang:
 				"println": Variant(Typ.ExternFn, [lambda x: print(str(x)), 1]),
 				"print": Variant(Typ.ExternFn, [lambda x: print(str(x), end=""), 1]),
 				"true": Variant(Typ.Int, 1),
-				"false": Variant(Typ.Int, 0)
+				"false": Variant(Typ.Int, 0),
+				"null": Variant(Typ.Null, None)
 			}
 		]
 
