@@ -266,6 +266,10 @@ class Block:
 					self.next_token()
 				items.append(self.evaluate_next_to_tree())
 			lhs = Variant(Typ.Array, items)
+		elif tok == Tk.Minus:
+			bp = self.infix_binding_power(Tk.Minus)
+			lhs = self.evaluate_next_to_tree(bp[1])
+			lhs = [Variant(Typ.Int, 0), lhs, Tk.Minus]
 		else:
 			self.error(f"bad value '{tok.val}'")
 
@@ -325,7 +329,7 @@ class Block:
 			case Tk.Star | Tk.Slash:
 				return 121, 120
 			case Tk.LeftParen | Tk.LeftBracket: # function call | array indexing
-				return 1001, 1000
+				return 0, 0
 			case _:
 				self.error(f"unknow operation {op}")
 
