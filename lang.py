@@ -555,7 +555,6 @@ class Block:
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
-				print(tree)
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
