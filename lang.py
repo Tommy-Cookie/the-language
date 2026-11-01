@@ -168,31 +168,9 @@ class Block:
 		self.error(f"expected {expected}, got {tok.typ} instead")
 
 
-	# return a refrence to a variant
-	def get_address(self, addr_tree: list) -> Variant:
-		if isinstance(addr_tree, Variant):
-			if addr_tree.typ == Typ.Id:
-				return self.get_frame_variable(addr_tree.val)
-			else:
-				self.error(f"'{addr_tree.val}' is not a valid address")
-
-		lhs = self.get_address(addr_tree[0])
-		rhs = self.evaluate_tree(addr_tree[1])
-		op = addr_tree[2]
-
-		match op:
-			case Tk.LeftBraket:
-				if lhs.typ == Typ.Array:
-					return lhs.val[rhs.val]
-				self.error(f"cannot index object {lhs.typ}")
-			case _:
-				self.error(f"invalid adressing operation {op}")
-
-
-	# TODO: make it work for all possible cases
 	# `tree` is the address, see line 138 for tree structure
 	def set_value_to_address(self, addr_tree: list, val: Variant):
-		addr = self.get_address(addr_tree)
+		addr = self.evaluate_tree(addr_tree)
 		addr.typ = val.typ
 		addr.val = val.val
 
