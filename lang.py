@@ -3,7 +3,7 @@ import re
 import sys
 from enum import Enum
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 
 class Tk(Enum):
@@ -62,6 +62,12 @@ class Token:
 			return self.typ == value
 		else:
 			return False
+
+
+@dataclass
+class Extern:
+	callback: Callable
+	num_args: int
 
 
 class Block:
@@ -229,7 +235,13 @@ class Block:
 			lhs = tree[0]
 		else:
 			lhs = self.evaluate_tree(tree[0])
-		rhs = self.evaluate_tree(tree[1])
+
+		if op == Tk.LeftParen:
+			rhs = []
+			for arg in tree[1]:
+				rhs.append(self.evaluate_tree(arg))
+		else:
+			rhs = self.evaluate_tree(tree[1])
 
 		match op:
 			case Tk.Plus:
@@ -243,6 +255,13 @@ class Block:
 			case Tk.Equal:
 				self.set_value_to_address(lhs, rhs)
 				return rhs
+			case Tk.LeftParen:
+				if isinstance(lhs, Extern):
+					if len(rhs) == lhs.num_args:
+						return lhs.callback(*rhs)
+					self.error(f"{lhs} expects {lhs.num_args} argument(s), got {len(rhs)} instead")
+				else:
+					self.error(f"{lhs} is not callable")
 			case _:
 				self.error(f"unknow operation {op}")
 
@@ -267,7 +286,6 @@ class Block:
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
-				print(tree)
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
@@ -319,8 +337,12 @@ class Lang:
 
 	def run(self):
 		print([t.val for t in self.tokens])
-		self.frames.append({})
+		self.frames = [
+			{"println": Extern(print, 1)},
+			{"print": Extern(lambda x: print(x, end=""), 1)}
+		]
 
+		self.frames.append({})
 		root_block = Block(self.tokens, self.frames)
 		root_block.run(False)
 
