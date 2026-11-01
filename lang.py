@@ -345,7 +345,7 @@ class Block:
 			case Tk.Star | Tk.Slash:
 				return 121, 120
 			case Tk.LeftParen | Tk.LeftBracket: # function call | array indexing
-				return 0, 0
+				return 1001, 1000
 			case _:
 				self.error(f"unknow operation {op}")
 
@@ -555,6 +555,7 @@ class Block:
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
+				print(tree)
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
