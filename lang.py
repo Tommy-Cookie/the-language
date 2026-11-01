@@ -23,6 +23,9 @@ class Tk(Enum):
 	Slash = 13
 	Minus = 14
 	String = 15
+	LeftBraket = 16
+	RightBraket = 17
+	Data = 18 # use to mark lists into data lists
 
 
 TOKEN_PATTERN = {
@@ -42,6 +45,8 @@ TOKEN_PATTERN = {
 	Tk.Semi: r";",
 	Tk.LeftParen: r"\(",
 	Tk.RightParen: r"\)",
+	Tk.LeftBraket: r"\[",
+	Tk.RightBraket: r"\]",
 	Tk.Comma: r",",
 	
 	Tk.NotAssigned: r"\S"
@@ -168,9 +173,18 @@ class Block:
 			lhs = tok
 		elif tok == Tk.LeftParen:
 			lhs = self.evaluate_next_to_tree()
-
 			if self.next_token() != Tk.RightParen:
 				self.error("mismatched parentheses")
+		elif tok == Tk.LeftBraket:
+			lhs = [Tk.Data]
+			while True:
+				peek = self.peek_token()
+				if peek == Tk.RightBraket:
+					self.next_token()
+					break
+				if peek == Tk.Comma:
+					self.next_token()
+				lhs.append(self.evaluate_next_to_tree())
 		else:
 			self.error(f"bad value '{tok.val}'")
 
@@ -180,7 +194,7 @@ class Block:
 
 			if op == Tk.Semi:
 				break
-			elif op == Tk.RightParen:
+			elif op == Tk.RightParen or op == Tk.RightBraket:
 				break
 			elif op == Tk.Comma:
 				break
@@ -201,6 +215,10 @@ class Block:
 					if peek == Tk.Comma:
 						self.next_token()
 					rhs.append(self.evaluate_next_to_tree())
+			elif op == Tk.LeftBraket: # array indexing
+				rhs = self.evaluate_next_to_tree()
+				if self.next_token() != Tk.RightBraket:
+					self.error("mismatched brakets")
 			else:
 				rhs = self.evaluate_next_to_tree(r_bp)
 
@@ -217,7 +235,7 @@ class Block:
 				return 111, 110
 			case Tk.Star | Tk.Slash:
 				return 121, 120
-			case Tk.LeftParen: # function call
+			case Tk.LeftParen | Tk.LeftBraket: # function call | array indexing
 				return 1001, 1000
 			case _:
 				self.error(f"unknow operation {op}")
@@ -234,6 +252,12 @@ class Block:
 				return tree.val
 			elif tree == Tk.Id:
 				return self.get_frame_variable(tree.val)
+
+		if tree[0] == Tk.Data:
+			items = []
+			for item in tree[1:]:
+				items.append(self.evaluate_tree(item))
+			return items
 
 		op = tree[2]
 
@@ -268,6 +292,8 @@ class Block:
 					self.error(f"{lhs} expects {lhs.num_args} argument(s), got {len(rhs)} instead")
 				else:
 					self.error(f"{lhs} is not callable")
+			case Tk.LeftBraket:
+				return lhs[rhs] # type: ignore
 			case _:
 				self.error(f"unknow operation {op}")
 
