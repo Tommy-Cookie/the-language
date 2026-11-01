@@ -23,9 +23,12 @@ class Tk(Enum):
 	Slash = 13
 	Minus = 14
 	String = 15
-	LeftBraket = 16
-	RightBraket = 17
-	Data = 18 # use to mark lists into data lists
+	LeftBracket = 16
+	RightBracket = 17
+	LeftBrace = 18
+	RightBrace = 19
+	Key_If = 20
+	Key_Else = 21
 
 
 class Typ(Enum):
@@ -37,9 +40,12 @@ class Typ(Enum):
 
 
 TOKEN_PATTERN = {
-	Tk.Key_Let: r"let",
-
 	Tk.String: r"\"[\S\s]*?\"",
+
+	Tk.Key_Let: r"let",
+	Tk.Key_If: r"if",
+	Tk.Key_Else: r"else",
+
 	Tk.Useless: r"\/\/[^\n]*|\/\*[\S\s]*?\*\/",
 	
 	Tk.Id: r"[a-zA-Z_][a-zA-Z0-9_]*",
@@ -53,8 +59,10 @@ TOKEN_PATTERN = {
 	Tk.Semi: r";",
 	Tk.LeftParen: r"\(",
 	Tk.RightParen: r"\)",
-	Tk.LeftBraket: r"\[",
-	Tk.RightBraket: r"\]",
+	Tk.LeftBracket: r"\[",
+	Tk.RightBracket: r"\]",
+	Tk.LeftBrace: r"{",
+	Tk.RightBrace: r"}",
 	Tk.Comma: r",",
 	
 	Tk.NotAssigned: r"\S"
@@ -168,11 +176,46 @@ class Block:
 		self.error(f"expected {expected}, got {tok.typ} instead")
 
 
+	def peek_or_useless(self) -> Token:
+		if self.ptr + 1 >= len(self.tokens):
+			return Token(Tk.Useless, None, 0, 0)
+		return self.peek_token()
+
+
 	# `tree` is the address, see line 138 for tree structure
 	def set_value_to_address(self, addr_tree: list, val: Variant):
 		addr = self.evaluate_tree(addr_tree)
 		addr.typ = val.typ
 		addr.val = val.val
+
+
+	def next_block(self) -> list[Token]:
+		self.expect_next_token(Tk.LeftBrace)
+
+		depth = 0
+		toks = []
+
+		while True:
+			tok = self.next_token()
+
+			if tok == Tk.LeftBrace:
+				depth += 1
+			if tok == Tk.RightBrace:
+				depth -= 1
+			if depth < 0:
+				return toks
+
+			toks.append(tok)
+
+
+	def is_true(self, val: Variant) -> bool:
+		match val.typ:
+			case Typ.Int | Typ.Float:
+				return val.val != 0
+			case Typ.Array | Typ.String:
+				return len(val.val) != 0
+			case _:
+				return False
 
 
 	#region Pratt Parsing
@@ -196,11 +239,11 @@ class Block:
 			lhs = self.evaluate_next_to_tree()
 			if self.next_token() != Tk.RightParen:
 				self.error("mismatched parentheses")
-		elif tok == Tk.LeftBraket:
+		elif tok == Tk.LeftBracket:
 			items = []
 			while True:
 				peek = self.peek_token()
-				if peek == Tk.RightBraket:
+				if peek == Tk.RightBracket:
 					self.next_token()
 					break
 				if peek == Tk.Comma:
@@ -216,9 +259,11 @@ class Block:
 
 			if op == Tk.Semi:
 				break
-			elif op == Tk.RightParen or op == Tk.RightBraket:
+			elif op == Tk.RightParen or op == Tk.RightBracket:
 				break
 			elif op == Tk.Comma:
+				break
+			elif op == Tk.LeftBrace: # e.g. if (1) { ... }
 				break
 
 			l_bp, r_bp = self.infix_binding_power(op)
@@ -237,9 +282,9 @@ class Block:
 					if peek == Tk.Comma:
 						self.next_token()
 					rhs.append(self.evaluate_next_to_tree())
-			elif op == Tk.LeftBraket: # array indexing
+			elif op == Tk.LeftBracket: # array indexing
 				rhs = self.evaluate_next_to_tree()
-				if self.next_token() != Tk.RightBraket:
+				if self.next_token() != Tk.RightBracket:
 					self.error("mismatched brakets")
 			else:
 				rhs = self.evaluate_next_to_tree(r_bp)
@@ -257,7 +302,7 @@ class Block:
 				return 111, 110
 			case Tk.Star | Tk.Slash:
 				return 121, 120
-			case Tk.LeftParen | Tk.LeftBraket: # function call | array indexing
+			case Tk.LeftParen | Tk.LeftBracket: # function call | array indexing
 				return 1001, 1000
 			case _:
 				self.error(f"unknow operation {op}")
@@ -325,7 +370,7 @@ class Block:
 					self.error(f"{lhs} expects {lhs.num_args} argument(s), got {len(rhs)} instead") # type: ignore
 				else:
 					self.error(f"{lhs} is not callable")
-			case Tk.LeftBraket:
+			case Tk.LeftBracket:
 				return lhs.val[rhs.val] # type: ignore
 			case _:
 				self.error(f"unknow operation {op}")
@@ -337,19 +382,45 @@ class Block:
 	def run(self, modify_frames = True):
 		self.ptr = 0
 
+		if len(self.tokens) == 0:
+			return
+
 		if modify_frames:
 			self.frames.append({})
 
 		while self.ptr < len(self.tokens):
-			first = self.tokens[self.ptr].val
+			ignore_semi = False
+			first = self.tokens[self.ptr]
 
-			if first == "let":
+			if first == Tk.Key_Let:
 				name = self.expect_next_token(Tk.Id).val
 				self.expect_next_token(Tk.Equal)
 				tree = self.evaluate_next_to_tree()
 				value = self.evaluate_tree(tree)
 
 				self.create_frame_variable(name, value)
+
+			elif first == Tk.Key_If:
+				ignore_semi = True
+				condition = self.evaluate_next_to_tree()
+				
+				true_body = self.next_block()
+				false_body = []
+
+				do_else = self.peek_or_useless()
+				if do_else == Tk.Key_Else:
+					self.next_token()
+					false_body = self.next_block()
+				
+				condition = self.evaluate_tree(condition)
+				condition = self.is_true(condition)
+
+				if condition:
+					sub_block = Block(true_body, self.frames)
+					sub_block.run()
+				elif do_else:
+					sub_block = Block(false_body, self.frames)
+					sub_block.run()
 			
 			else:
 				self.ptr -= 1
@@ -357,7 +428,8 @@ class Block:
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
-			self.expect_next_token(Tk.Semi)
+			if not ignore_semi:
+				self.expect_next_token(Tk.Semi)
 
 			self.ptr += 1
 
@@ -406,7 +478,9 @@ class Lang:
 	def run(self):
 		self.frames = [
 			{"println": Extern(lambda x: print(str(x)), 1)},
-			{"print": Extern(lambda x: print(str(x), end=""), 1)}
+			{"print": Extern(lambda x: print(str(x), end=""), 1)},
+			{"true": Variant(Typ.Int, 1)},
+			{"false": Variant(Typ.Int, 0)}
 		]
 
 		self.frames.append({})
