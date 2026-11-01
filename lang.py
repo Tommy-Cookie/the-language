@@ -20,6 +20,8 @@ class Tk(Enum):
 	LeftParen = 10
 	RightParen = 11
 	Comma = 12
+	Slash = 13
+	Minus = 14
 
 
 TOKEN_PATTERN = {
@@ -33,13 +35,15 @@ TOKEN_PATTERN = {
 	Tk.Float: r"[+-]?([0-9]+)?\.([0-9]+)?",
 	Tk.Int: r"[+-]?[0-9]+",
 	Tk.Plus: r"\+",
+	Tk.Minus: r"-",
 	Tk.Star: r"\*",
+	Tk.Slash: r"\/",
 	Tk.Semi: r";",
 	Tk.LeftParen: r"\(",
 	Tk.RightParen: r"\)",
 	Tk.Comma: r",",
 	
-	Tk.NotAssigned: r"\S",
+	Tk.NotAssigned: r"\S"
 }
 
 
@@ -199,9 +203,9 @@ class Block:
 		match op:
 			case Tk.Equal:
 				return 101, 100
-			case Tk.Plus:
+			case Tk.Plus | Tk.Minus:
 				return 111, 110
-			case Tk.Star:
+			case Tk.Star | Tk.Slash:
 				return 121, 120
 			case Tk.LeftParen: # function call
 				return 1001, 1000
@@ -230,8 +234,12 @@ class Block:
 		match op:
 			case Tk.Plus:
 				return lhs + rhs
+			case Tk.Minus:
+				return lhs - rhs
 			case Tk.Star:
 				return lhs * rhs
+			case Tk.Slash:
+				return lhs / rhs
 			case Tk.Equal:
 				self.set_value_to_address(lhs, rhs)
 				return rhs
