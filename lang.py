@@ -37,6 +37,9 @@ class Tk(Enum):
 	EqualEqual = 27
 	AndAnd = 28
 	OrOr = 29
+	Key_Break = 30
+	Key_Function = 31
+	Key_Return = 32
 
 
 class Typ(Enum):
@@ -45,6 +48,9 @@ class Typ(Enum):
 	String = 2
 	Array = 3
 	Id = 4
+	ExternFn = 5
+	BlockFn = 6
+	Null = 7
 
 
 TOKEN_PATTERN = {
@@ -54,6 +60,9 @@ TOKEN_PATTERN = {
 	Tk.Key_If: r"if",
 	Tk.Key_Else: r"else",
 	Tk.Key_While: r"while",
+	Tk.Key_Break: r"break",
+	Tk.Key_Function: r"function",
+	Tk.Key_Return: r"return",
 
 	Tk.Useless: r"\/\/[^\n]*|\/\*[\S\s]*?\*\/",
 	
@@ -102,12 +111,6 @@ class Token:
 
 
 @dataclass
-class Extern:
-	callback: Callable
-	num_args: int
-
-
-@dataclass
 class Variant:
 	typ: Typ
 	val: Any
@@ -121,6 +124,8 @@ class Variant:
 		match self.typ:
 			case Typ.Array:
 				return "[" + ", ".join([str(l) for l in self.val]) + "]"
+			case Typ.Null:
+				return "null"
 			case _:
 				return str(self.val)
 
@@ -130,6 +135,9 @@ class Block:
 		self.tokens = tokens
 		self.ptr = 0
 		self.frames = frames
+
+		self.flag_break = False
+		self.flag_return: Any = None
 
 
 	def error(self, msg: str):
@@ -243,6 +251,17 @@ class Block:
 		tok = self.next_token()
 		lhs = None
 
+		def list_liked(closing: Tk) -> list:
+			arr = []
+			while True:
+				peek = self.peek_token()
+				if peek == closing:
+					self.next_token()
+					return arr
+				elif peek == Tk.Comma:
+					self.next_token()
+				arr.append(self.evaluate_next_to_tree())
+
 		if tok == Tk.Int:
 			lhs = Variant(Typ.Int, tok.val)
 		elif tok == Tk.Float:
@@ -255,20 +274,20 @@ class Block:
 			lhs = self.evaluate_next_to_tree()
 			if self.next_token() != Tk.RightParen:
 				self.error("mismatched parentheses")
+
 		elif tok == Tk.LeftBracket:
-			items = []
-			while True:
-				peek = self.peek_token()
-				if peek == Tk.RightBracket:
-					self.next_token()
-					break
-				if peek == Tk.Comma:
-					self.next_token()
-				items.append(self.evaluate_next_to_tree())
+			items = list_liked(Tk.RightBracket)
 			lhs = Variant(Typ.Array, items)
+
 		elif tok == Tk.Minus:
 			lhs = self.evaluate_next_to_tree(int(1e9))
 			lhs = [Variant(Typ.Int, 0), lhs, Tk.Minus]
+
+		elif tok == Tk.Key_Function:
+			self.expect_next_token(Tk.LeftParen)
+			args = list_liked(Tk.RightParen)
+			body = self.next_block()
+			lhs = [args, body, Tk.LeftBrace]
 		else:
 			self.error(f"bad value '{tok.val}'")
 
@@ -292,15 +311,7 @@ class Block:
 			self.next_token()
 
 			if op == Tk.LeftParen: # function call
-				rhs = []
-				while True:
-					peek = self.peek_token()
-					if peek == Tk.RightParen:
-						self.next_token()
-						break
-					if peek == Tk.Comma:
-						self.next_token()
-					rhs.append(self.evaluate_next_to_tree())
+				rhs = list_liked(Tk.RightParen)
 			elif op == Tk.LeftBracket: # array indexing
 				rhs = self.evaluate_next_to_tree()
 				if self.next_token() != Tk.RightBracket:
@@ -349,11 +360,18 @@ class Block:
 				for item in tree.val:
 					items.append(self.evaluate_tree(item))
 				return Variant(Typ.Array, items)
+			return tree
 
 		op = tree[2]
 
 		if op == Tk.Equal:
 			lhs = tree[0]
+		elif op == Tk.LeftBrace:
+			lhs = []
+			for item in tree[0]:
+				if (not isinstance(item, Variant)) or item.typ != Typ.Id:
+					self.error(f"invalid function argument name {item}")
+				lhs.append(item.val)
 		else:
 			lhs = self.evaluate_tree(tree[0])
 
@@ -361,6 +379,8 @@ class Block:
 			rhs = []
 			for arg in tree[1]:
 				rhs.append(self.evaluate_tree(arg))
+		elif op == Tk.LeftBrace:
+			rhs = tree[1]
 		else:
 			rhs = self.evaluate_tree(tree[1])
 
@@ -404,15 +424,38 @@ class Block:
 			case Tk.Equal:
 				self.set_value_to_address(lhs, rhs) # type: ignore
 				return self.evaluate_tree(rhs) # type: ignore
+			
 			case Tk.LeftParen:
-				if isinstance(lhs, Extern):
-					if len(rhs) == lhs.num_args: # type: ignore
-						return lhs.callback(*rhs) # type: ignore
-					self.error(f"{lhs} expects {lhs.num_args} argument(s), got {len(rhs)} instead") # type: ignore
+				if lhs.typ == Typ.ExternFn: # type: ignore
+					if len(rhs) == lhs.val[1]: # type: ignore
+						return lhs.val[0](*rhs) # type: ignore
+					self.error(f"{lhs} expects {lhs.val[0]} argument(s), got {len(rhs)} instead") # type: ignore
+
+				elif lhs.typ == Typ.BlockFn: # type: ignore
+					if len(rhs) == len(lhs.val[1]): # type: ignore
+						sub_block = Block(lhs.val[0], self.frames) # type: ignore
+
+						args = {}
+						for i in range(len(rhs)):# type: ignore
+							args[lhs.val[1][i]] = rhs[i] # type: ignore
+
+						self.frames.append(args)
+						sub_block.run(False)
+						self.frames.pop()
+
+						if sub_block.flag_return is not None:
+							return sub_block.flag_return
+						return Variant(Typ.Null, None)
+					
+					self.error(f"{lhs} expects {lhs.val[0]} argument(s), got {len(rhs)} instead") # type: ignore
+
 				else:
 					self.error(f"{lhs} is not callable")
+
 			case Tk.LeftBracket:
 				return lhs.val[rhs.val] # type: ignore
+			case Tk.LeftBrace:
+				return Variant(Typ.BlockFn, [rhs, lhs]) # type: ignore
 			case _:
 				self.error(f"unknow operation {op}")
 
@@ -459,9 +502,24 @@ class Block:
 				if condition:
 					sub_block = Block(true_body, self.frames)
 					sub_block.run()
+
+					if sub_block.flag_break:
+						self.flag_break = True
+						return
+					if sub_block.flag_return is not None:
+						self.flag_return = sub_block.flag_return
+						return
+					
 				elif do_else:
 					sub_block = Block(false_body, self.frames)
 					sub_block.run()
+
+					if sub_block.flag_break:
+						self.flag_break = True
+						return
+					if sub_block.flag_return is not None:
+						self.flag_return = sub_block.flag_return
+						return
 
 			elif first == Tk.Key_While:
 				ignore_semi = True
@@ -472,6 +530,20 @@ class Block:
 
 				while self.is_true(self.evaluate_tree(condition)):
 					sub_block.run()
+					if sub_block.flag_break:
+						break
+					if sub_block.flag_return is not None:
+						self.flag_return = sub_block.flag_return
+						return
+
+			elif first == Tk.Key_Break:
+				self.flag_break = True
+				return
+
+			elif first == Tk.Key_Return:
+				tree = self.evaluate_next_to_tree()
+				self.flag_return = self.evaluate_tree(tree)
+				return
 			
 			else:
 				self.ptr -= 1
@@ -528,10 +600,12 @@ class Lang:
 
 	def run(self):
 		self.frames = [
-			{"println": Extern(lambda x: print(str(x)), 1)},
-			{"print": Extern(lambda x: print(str(x), end=""), 1)},
-			{"true": Variant(Typ.Int, 1)},
-			{"false": Variant(Typ.Int, 0)}
+			{
+				"println": Variant(Typ.ExternFn, [lambda x: print(str(x)), 1]),
+				"print": Variant(Typ.ExternFn, [lambda x: print(str(x), end=""), 1]),
+				"true": Variant(Typ.Int, 1),
+				"false": Variant(Typ.Int, 0)
+			}
 		]
 
 		self.frames.append({})
