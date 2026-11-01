@@ -403,7 +403,6 @@ class Lang:
 
 
 	def run(self):
-		print([t.val for t in self.tokens])
 		self.frames = [
 			{"println": Extern(lambda x: print(x.val), 1)},
 			{"print": Extern(lambda x: print(x.val, end=""), 1)}
