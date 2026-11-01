@@ -70,7 +70,7 @@ TOKEN_PATTERN = {
 	Tk.EqualEqual: r"==",
 	Tk.Equal: r"=",
 	Tk.Plus: r"\+",
-	Tk.Float: r"[+-]?([0-9]+)?\.([0-9]+)?",
+	Tk.Float: r"[+-]?[0-9]+\.[0-9]+",
 	Tk.Int: r"[+-]?[0-9]+",
 	Tk.Minus: r"-",
 	Tk.Star: r"\*",
