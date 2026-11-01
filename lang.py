@@ -265,19 +265,19 @@ class Block:
 
 	#region Run
 
-	def evaluate_tree(self, tree: list):
+	def evaluate_tree(self, tree: list) -> Variant:
 		if isinstance(tree, Variant):
 			if tree == Typ.Int or tree == Typ.Float:
-				return tree.val
+				return tree
 			elif tree == Typ.String:
-				return tree.val
+				return tree
 			elif tree == Typ.Id:
 				return self.get_frame_variable(tree.val)
 			elif tree == Typ.Array:
 				items = []
 				for item in tree.val:
 					items.append(self.evaluate_tree(item))
-				return items
+				return Variant(Typ.Array, items)
 
 		op = tree[2]
 
@@ -293,27 +293,39 @@ class Block:
 		else:
 			rhs = self.evaluate_tree(tree[1])
 
+		def make_variant_based_on_type(val) -> Variant:
+			if isinstance(val, float):
+				return Variant(Typ.Float, val)
+			elif isinstance(val, int):
+				return Variant(Typ.Int, val)
+			elif isinstance(val, str):
+				return Variant(Typ.String, val)
+			elif isinstance(val, list):
+				return Variant(Typ.Array, val)
+
+			self.error(f"no matching type for value {repr(val)}")
+
 		match op:
 			case Tk.Plus:
-				return lhs + rhs
+				return make_variant_based_on_type(lhs.val + rhs.val) # type: ignore
 			case Tk.Minus:
-				return lhs - rhs
+				return make_variant_based_on_type(lhs.val - rhs.val) # type: ignore
 			case Tk.Star:
-				return lhs * rhs
+				return make_variant_based_on_type(lhs.val * rhs.val) # type: ignore
 			case Tk.Slash:
-				return lhs / rhs
+				return make_variant_based_on_type(lhs.val / rhs.val) # type: ignore
 			case Tk.Equal:
-				self.set_value_to_address(lhs, rhs)
-				return rhs
+				self.set_value_to_address(lhs, rhs) # type: ignore
+				return self.evaluate_tree(rhs) # type: ignore
 			case Tk.LeftParen:
 				if isinstance(lhs, Extern):
-					if len(rhs) == lhs.num_args:
-						return lhs.callback(*rhs)
-					self.error(f"{lhs} expects {lhs.num_args} argument(s), got {len(rhs)} instead")
+					if len(rhs) == lhs.num_args: # type: ignore
+						return lhs.callback(*rhs) # type: ignore
+					self.error(f"{lhs} expects {lhs.num_args} argument(s), got {len(rhs)} instead") # type: ignore
 				else:
 					self.error(f"{lhs} is not callable")
 			case Tk.LeftBraket:
-				return lhs[rhs] # type: ignore
+				return lhs.val[rhs.val] # type: ignore
 			case _:
 				self.error(f"unknow operation {op}")
 
@@ -341,7 +353,6 @@ class Block:
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
-				print(tree)
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
@@ -394,8 +405,8 @@ class Lang:
 	def run(self):
 		print([t.val for t in self.tokens])
 		self.frames = [
-			{"println": Extern(print, 1)},
-			{"print": Extern(lambda x: print(x, end=""), 1)}
+			{"println": Extern(lambda x: print(x.val), 1)},
+			{"print": Extern(lambda x: print(x.val, end=""), 1)}
 		]
 
 		self.frames.append({})
