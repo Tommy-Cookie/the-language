@@ -93,6 +93,13 @@ class Variant:
 			return self.typ == value
 		return False
 
+	def __str__(self) -> str:
+		match self.typ:
+			case Typ.Array:
+				return "[" + ", ".join([str(l) for l in self.val]) + "]"
+			case _:
+				return str(self.val)
+
 
 class Block:
 	def __init__(self, tokens: list[Token], frames: list[Variables]) -> None:
@@ -161,17 +168,33 @@ class Block:
 		self.error(f"expected {expected}, got {tok.typ} instead")
 
 
+	# return a refrence to a variant
+	def get_address(self, addr_tree: list) -> Variant:
+		if isinstance(addr_tree, Variant):
+			if addr_tree.typ == Typ.Id:
+				return self.get_frame_variable(addr_tree.val)
+			else:
+				self.error(f"'{addr_tree.val}' is not a valid address")
+
+		lhs = self.get_address(addr_tree[0])
+		rhs = self.evaluate_tree(addr_tree[1])
+		op = addr_tree[2]
+
+		match op:
+			case Tk.LeftBraket:
+				if lhs.typ == Typ.Array:
+					return lhs.val[rhs.val]
+				self.error(f"cannot index object {lhs.typ}")
+			case _:
+				self.error(f"invalid adressing operation {op}")
+
+
 	# TODO: make it work for all possible cases
 	# `tree` is the address, see line 138 for tree structure
-	def set_value_to_address(self, addr_tree: list, val: Any, is_top = True):
-		if isinstance(addr_tree, Variant):
-			if is_top:
-				self.set_frame_variable(addr_tree.val, val)
-			else:
-				self.error("NOT IMPLEMENTED")
-			return
-
-		self.error("NOT IMPLEMENTED")
+	def set_value_to_address(self, addr_tree: list, val: Variant):
+		addr = self.get_address(addr_tree)
+		addr.typ = val.typ
+		addr.val = val.val
 
 
 	#region Pratt Parsing
@@ -404,8 +427,8 @@ class Lang:
 
 	def run(self):
 		self.frames = [
-			{"println": Extern(lambda x: print(x.val), 1)},
-			{"print": Extern(lambda x: print(x.val, end=""), 1)}
+			{"println": Extern(lambda x: print(str(x)), 1)},
+			{"print": Extern(lambda x: print(str(x), end=""), 1)}
 		]
 
 		self.frames.append({})
