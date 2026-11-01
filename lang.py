@@ -267,8 +267,7 @@ class Block:
 				items.append(self.evaluate_next_to_tree())
 			lhs = Variant(Typ.Array, items)
 		elif tok == Tk.Minus:
-			bp = self.infix_binding_power(Tk.Minus)
-			lhs = self.evaluate_next_to_tree(bp[1])
+			lhs = self.evaluate_next_to_tree(int(1e9))
 			lhs = [Variant(Typ.Int, 0), lhs, Tk.Minus]
 		else:
 			self.error(f"bad value '{tok.val}'")
