@@ -19,6 +19,7 @@ class Tk(Enum):
 	NotAssigned = 9
 	LeftParen = 10
 	RightParen = 11
+	Comma = 12
 
 
 TOKEN_PATTERN = {
@@ -36,6 +37,7 @@ TOKEN_PATTERN = {
 	Tk.Semi: r";",
 	Tk.LeftParen: r"\(",
 	Tk.RightParen: r"\)",
+	Tk.Comma: r",",
 	
 	Tk.NotAssigned: r"\S",
 }
@@ -84,7 +86,7 @@ class Block:
 				frame[name] = value
 				return
 
-		self.error(f"identifier {name} doesn't exist")
+		self.error(f"identifier '{name}' doesn't exist")
 
 
 	def get_frame_variable(self, name: str) -> Any:
@@ -92,7 +94,7 @@ class Block:
 			if name in frame:
 				return frame[name]
 
-		self.error(f"identifier {name} doesn't exist")
+		self.error(f"identifier '{name}' doesn't exist")
 
 
 	def get_frame_address(self, name: str) -> int:
@@ -100,7 +102,7 @@ class Block:
 			if name in frame:
 				return i
 
-		self.error(f"identifier {name} doesn't exist")
+		self.error(f"identifier '{name}' doesn't exist")
 
 
 	def next_token(self) -> Token:
@@ -166,6 +168,8 @@ class Block:
 				break
 			elif op == Tk.RightParen:
 				break
+			elif op == Tk.Comma:
+				break
 
 			l_bp, r_bp = self.infix_binding_power(op)
 			if l_bp < min_bp:
@@ -173,7 +177,19 @@ class Block:
 
 			self.next_token()
 
-			rhs = self.evaluate_next_to_tree(r_bp)
+			if op == Tk.LeftParen: # function call
+				rhs = []
+				while True:
+					peek = self.peek_token()
+					if peek == Tk.RightParen:
+						self.next_token()
+						break
+					if peek == Tk.Comma:
+						self.next_token()
+					rhs.append(self.evaluate_next_to_tree())
+			else:
+				rhs = self.evaluate_next_to_tree(r_bp)
+
 			lhs = [lhs, rhs, op]
 
 		return lhs
@@ -182,11 +198,13 @@ class Block:
 	def infix_binding_power(self, op: Tk) -> tuple:
 		match op:
 			case Tk.Equal:
-				return 1, 0
+				return 101, 100
 			case Tk.Plus:
-				return 11, 10
+				return 111, 110
 			case Tk.Star:
-				return 21, 20
+				return 121, 120
+			case Tk.LeftParen: # function call
+				return 1001, 1000
 			case _:
 				self.error(f"unknow operation {op}")
 
@@ -241,6 +259,7 @@ class Block:
 			else:
 				self.ptr -= 1
 				tree = self.evaluate_next_to_tree()
+				print(tree)
 				self.evaluate_tree(tree)
 
 			# asserts semi colon
