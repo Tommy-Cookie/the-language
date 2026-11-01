@@ -22,12 +22,13 @@ class Tk(Enum):
 	Comma = 12
 	Slash = 13
 	Minus = 14
+	String = 15
 
 
 TOKEN_PATTERN = {
 	Tk.Key_Let: r"let",
 
-	# NOTE: must place after String pattern 
+	Tk.String: r"\"[\S\s]*?\"",
 	Tk.Useless: r"\/\/[^\n]*|\/\*[\S\s]*?\*\/",
 	
 	Tk.Id: r"[a-zA-Z_][a-zA-Z0-9_]*",
@@ -162,6 +163,8 @@ class Block:
 			lhs = tok
 		elif tok == Tk.Id:
 			lhs = tok
+		elif tok == Tk.String:
+			lhs = tok
 		elif tok == Tk.LeftParen:
 			lhs = self.evaluate_next_to_tree()
 
@@ -225,6 +228,8 @@ class Block:
 	def evaluate_tree(self, tree: list):
 		if isinstance(tree, Token):
 			if tree == Tk.Int or tree == Tk.Float:
+				return tree.val
+			elif tree == Tk.String:
 				return tree.val
 			elif tree == Tk.Id:
 				return self.get_frame_variable(tree.val)
@@ -328,6 +333,8 @@ class Lang:
 					val = int(val)
 				case Tk.Float:
 					val = float(val)
+				case Tk.String:
+					val = val[1:-1]
 
 			if typ != Tk.Useless:
 				tokens.append(Token(typ, val, line, col))
