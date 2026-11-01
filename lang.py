@@ -143,8 +143,9 @@ class Block:
 	def set_value_to_address(self, addr_tree: list, val: Any, is_top = True):
 		if isinstance(addr_tree, Token):
 			if is_top:
-				addr = self.get_frame_address(addr_tree.val)
-				self.frames[addr][addr_tree.val] = val
+				self.set_frame_variable(addr_tree.val, val)
+			else:
+				self.error("NOT IMPLEMENTED")
 			return
 
 		self.error("NOT IMPLEMENTED")
