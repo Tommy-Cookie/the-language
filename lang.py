@@ -435,7 +435,7 @@ class Block:
 				if lhs.typ == Typ.ExternFn: # type: ignore
 					if len(rhs) == lhs.val[1]: # type: ignore
 						return lhs.val[0](*rhs) # type: ignore
-					self.error(f"{lhs} expects {lhs.val[0]} argument(s), got {len(rhs)} instead") # type: ignore
+					self.error(f"{lhs} expects {lhs.val[1]} argument(s), got {len(rhs)} instead") # type: ignore
 
 				elif lhs.typ == Typ.BlockFn: # type: ignore
 					if len(rhs) == len(lhs.val[1]): # type: ignore
@@ -454,7 +454,7 @@ class Block:
 							return sub_block.flag_return
 						return Variant(Typ.Null, None)
 					
-					self.error(f"{lhs} expects {lhs.val[0]} argument(s), got {len(rhs)} instead") # type: ignore
+					self.error(f"{lhs} expects {len(lhs.val[1])} argument(s), got {len(rhs)} instead") # type: ignore
 
 				else:
 					self.error(f"{lhs} is not callable")
