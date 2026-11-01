@@ -31,6 +31,7 @@ for i, l in enumerate(ls, start=1):
 			final += f"==== TEST {i} RAISED AN INTERNEL ERROR ====\n"
 			final += format_exc()
 			final += f"==== END OF TEST {i} INTERNEL ERROR ====\n"
+			final = final.replace("F:\\Python_second\\TheLanguage\\", "\\")
 			error = True
 
 	if error:

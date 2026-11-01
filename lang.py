@@ -424,7 +424,7 @@ class Block:
 			case Tk.AndAnd:
 				return make_variant_based_on_type(
 					1 if self.is_true(lhs) and self.is_true(rhs) else 0) # type: ignore
-			case Tk.AndAnd:
+			case Tk.OrOr:
 				return make_variant_based_on_type(
 					1 if self.is_true(lhs) or self.is_true(rhs) else 0) # type: ignore
 			case Tk.Equal:
