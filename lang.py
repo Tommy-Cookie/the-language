@@ -29,6 +29,14 @@ class Tk(Enum):
 	RightBrace = 19
 	Key_If = 20
 	Key_Else = 21
+	Key_While = 22
+	Less = 23
+	Greater = 24
+	LessEqual = 25
+	GreaterEqual = 26
+	EqualEqual = 27
+	AndAnd = 28
+	OrOr = 29
 
 
 class Typ(Enum):
@@ -45,10 +53,12 @@ TOKEN_PATTERN = {
 	Tk.Key_Let: r"let",
 	Tk.Key_If: r"if",
 	Tk.Key_Else: r"else",
+	Tk.Key_While: r"while",
 
 	Tk.Useless: r"\/\/[^\n]*|\/\*[\S\s]*?\*\/",
 	
 	Tk.Id: r"[a-zA-Z_][a-zA-Z0-9_]*",
+	Tk.EqualEqual: r"==",
 	Tk.Equal: r"=",
 	Tk.Float: r"[+-]?([0-9]+)?\.([0-9]+)?",
 	Tk.Int: r"[+-]?[0-9]+",
@@ -64,6 +74,12 @@ TOKEN_PATTERN = {
 	Tk.LeftBrace: r"{",
 	Tk.RightBrace: r"}",
 	Tk.Comma: r",",
+	Tk.LessEqual: r"<=",
+	Tk.GreaterEqual: r">=",
+	Tk.Less: r"<",
+	Tk.Greater: r">",
+	Tk.AndAnd: r"&&",
+	Tk.OrOr: r"\|\|",
 	
 	Tk.NotAssigned: r"\S"
 }
@@ -296,6 +312,12 @@ class Block:
 
 	def infix_binding_power(self, op: Tk) -> tuple:
 		match op:
+			case Tk.OrOr:
+				return 71, 70
+			case Tk.AndAnd:
+				return 81, 80
+			case Tk.Less | Tk.Greater | Tk.LessEqual | Tk.GreaterEqual | Tk.EqualEqual:
+				return 91, 90
 			case Tk.Equal:
 				return 101, 100
 			case Tk.Plus | Tk.Minus:
@@ -360,6 +382,22 @@ class Block:
 				return make_variant_based_on_type(lhs.val * rhs.val) # type: ignore
 			case Tk.Slash:
 				return make_variant_based_on_type(lhs.val / rhs.val) # type: ignore
+			case Tk.Less:
+				return make_variant_based_on_type(1 if lhs.val < rhs.val else 0) # type: ignore
+			case Tk.Greater:
+				return make_variant_based_on_type(1 if lhs.val > rhs.val else 0) # type: ignore
+			case Tk.LessEqual:
+				return make_variant_based_on_type(1 if lhs.val <= rhs.val else 0) # type: ignore
+			case Tk.GreaterEqual:
+				return make_variant_based_on_type(1 if lhs.val >= rhs.val else 0) # type: ignore
+			case Tk.EqualEqual:
+				return make_variant_based_on_type(1 if lhs.val == rhs.val else 0) # type: ignore
+			case Tk.AndAnd:
+				return make_variant_based_on_type(
+					1 if self.is_true(lhs) and self.is_true(rhs) else 0) # type: ignore
+			case Tk.AndAnd:
+				return make_variant_based_on_type(
+					1 if self.is_true(lhs) or self.is_true(rhs) else 0) # type: ignore
 			case Tk.Equal:
 				self.set_value_to_address(lhs, rhs) # type: ignore
 				return self.evaluate_tree(rhs) # type: ignore
@@ -420,6 +458,16 @@ class Block:
 					sub_block.run()
 				elif do_else:
 					sub_block = Block(false_body, self.frames)
+					sub_block.run()
+
+			elif first == Tk.Key_While:
+				ignore_semi = True
+				condition = self.evaluate_next_to_tree()
+				
+				body = self.next_block()
+				sub_block = Block(body, self.frames)
+
+				while self.is_true(self.evaluate_tree(condition)):
 					sub_block.run()
 			
 			else:
@@ -486,5 +534,3 @@ class Lang:
 		self.frames.append({})
 		root_block = Block(self.tokens, self.frames)
 		root_block.run(False)
-
-		print(self.frames)
